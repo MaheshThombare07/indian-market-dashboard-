@@ -6,12 +6,12 @@ const POLL_INTERVAL = 5000;
 /**
  * Custom hook: fetches live NIFTY data from the Express backend.
  *
- * Merges live NSE values with static data so all time-periods
- * (yesterday, 5days, 1month) still work from the static fallback.
+ * The `/api/nifty` response now includes chg.today, chg['5days'],
+ * and chg['1month'] (extracted from NSE allIndices fields).
+ * The `yesterday` period falls back to static data since NSE doesn't
+ * expose the day-before-previous-close in a single snapshot.
  *
  * Returns: { data, loading, error, marketOpen, isLive }
- *   data      – complete NIFTY array (live values merged in)
- *   isLive    – true when backend data is being used
  */
 export default function useNiftyData(staticData) {
   const [liveData, setLiveData] = useState(null);
@@ -24,21 +24,15 @@ export default function useNiftyData(staticData) {
     try {
       const res = await axios.get('/api/nifty');
       const valid = res.data?.status === 'ok' || res.data?.status === 'stale';
-      if (!valid) {
-        console.warn('[useNiftyData] Unexpected API response', res.data);
-        return;
-      }
-      // Merge live values into the static data shape
-      const merged = mergeLiveWithStatic(res.data.data, staticData);
+      if (!valid) return;
+
+      const merged = mergeAll(staticData, res.data.data);
       setLiveData(merged);
       setMarketOpen(res.data.marketOpen);
       setError(null);
-      console.log(`[useNiftyData] ✅ ${merged.length} indices (live=${res.data.marketOpen ? 'open' : 'cached'})`);
     } catch (err) {
-      console.warn('[useNiftyData] Fetch failed:', err.message);
-      if (!liveData) {
-        setError(err.message);
-      }
+      console.warn('[useNiftyData]', err.message);
+      if (!liveData) setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -50,23 +44,23 @@ export default function useNiftyData(staticData) {
     return () => clearInterval(intervalRef.current);
   }, []);
 
-  const data = liveData ?? staticData;
-  const isLive = liveData !== null;
-
-  return { data, loading, error, marketOpen, isLive };
+  return {
+    data: liveData ?? staticData,
+    isLive: liveData !== null,
+    loading,
+    error,
+    marketOpen,
+  };
 }
 
-/**
- * Map live NSE items by id, then merge into the full static array so
- * every static item keeps its other time-periods (yesterday, etc.).
- */
-function mergeLiveWithStatic(liveItems, staticItems) {
+function mergeAll(staticItems, liveItems) {
   const liveMap = new Map();
   liveItems.forEach((item) => liveMap.set(item.id, item));
 
   return staticItems.map((staticItem) => {
     const live = liveMap.get(staticItem.id);
-    if (!live) return staticItem; // keep static as-is
+    if (!live) return staticItem;
+
     return {
       ...staticItem,
       base: live.base ?? staticItem.base,
@@ -74,8 +68,8 @@ function mergeLiveWithStatic(liveItems, staticItems) {
       change: live.change,
       percentChange: live.percentChange,
       chg: {
-        ...staticItem.chg,
-        today: live.percentChange ?? live.chg?.today ?? staticItem.chg?.today ?? 0,
+        ...staticItem.chg,        // static fallback for yesterday
+        ...(live.chg || {}),      // live data (today, 5days, 1month)
       },
     };
   });

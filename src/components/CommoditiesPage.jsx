@@ -1,18 +1,21 @@
 import { COMMODITIES } from '../data';
 import IndexRow from './IndexRow';
+import useCommoditiesData from '../hooks/useCommoditiesData';
 
 export default function CommoditiesPage({ period, watchlist, onToggleWatch }) {
+  const { data: commodData } = useCommoditiesData(COMMODITIES);
+
   const panels = [
-    { title: 'Precious metals', badge: 'MCX · ranked', ids: ['gold24','mcxgld','silver'] },
-    { title: 'Energy', badge: 'ranked', ids: ['brent','wti','natgas','pet'] },
-    { title: 'Base metals', badge: 'ranked', ids: ['copper','nickel','zinc','alum'] },
+    { title: 'Precious metals', badge: 'Yahoo Finance', ids: ['gold','silver'] },
+    { title: 'Energy', badge: 'Yahoo Finance', ids: ['brent','wti','natgas'] },
+    { title: 'Base metals', badge: 'MCX · static', ids: ['copper','nickel','zinc','alum'] },
   ];
 
   return (
     <div className="full-page">
       <div className="fp-grid">
         {panels.map(p => {
-          const data = COMMODITIES.filter(c => p.ids.includes(c.id));
+          const data = commodData.filter(c => p.ids.includes(c.id));
           return (
             <div className="panel" key={p.title}>
               <div className="panel-hdr">

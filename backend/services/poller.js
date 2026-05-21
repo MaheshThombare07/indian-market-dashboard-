@@ -1,78 +1,131 @@
-/**
- * Polling manager.
- *
- * During market hours the poller fetches NSE data every 5 seconds
- * and writes it into the shared cache.  When the market closes it
- * stops and schedules a wake-up for the next open.
- */
-
 const { getNiftyData } = require('./nseService');
+const { getBseData } = require('./bseService');
+const { fetchAllGlobalQuotes } = require('./yahooFinanceService');
+const { fetchAllCommodities } = require('./commoditiesService');
 const cache = require('../middleware/cacheInstance');
 const { isMarketOpen, msUntilNextOpen } = require('../utils/marketHours');
 
-const CACHE_KEY = 'nifty_indices';
-let pollTimer = null;
+const LIVE_INTERVAL_OPEN = 5_000;
+const GLOBAL_INTERVAL_OPEN = 15_000;
+const CHECK_INTERVAL_CLOSED = 60_000;
+
+let niftyTimer = null;
+let globalTimer = null;
+let commoditiesTimer = null;
 let isPolling = false;
+let nseFetching = false;    // lock: skip a cycle if NSE is slow
+let consecutiveNseErrs = 0; // circuit-breaker: back off on repeated failures
 
-const POLL_INTERVAL_OPEN = 5_000;  // 5 seconds when market is open
-const POLL_INTERVAL_CLOSED = 60_000; // 1 minute check when closed
-
-/**
- * Single fetch → cache update.
- */
-async function fetchAndCache() {
+// ── NIFTY + BSE poller (same 5 s cycle, same NSE endpoint) ─
+async function fetchNseData() {
+  if (nseFetching) return; // skip if previous cycle still in-flight
+  nseFetching = true;
   try {
-    const rawData = await getNiftyData();
-    const data = {
-      data: rawData,
-      fetchedAt: new Date().toISOString(),
-    };
-    cache.set(CACHE_KEY, data);
-    console.log(`[Poller] Cached ${rawData.length} indices at ${data.fetchedAt}`);
+    const [nifty, bse] = await Promise.all([
+      getNiftyData().catch((err) => { console.error('[Poller:Nifty]', err.message); return null; }),
+      getBseData().catch((err) => { console.error('[Poller:Bse]', err.message); return null; }),
+    ]);
+    if (nifty) cache.set('nifty_indices', { data: nifty, fetchedAt: new Date().toISOString() });
+    if (bse)   cache.set('bse_indices',   { data: bse,   fetchedAt: new Date().toISOString() });
+    if (nifty || bse) consecutiveNseErrs = 0; else consecutiveNseErrs++;
   } catch (err) {
-    console.error('[Poller] Fetch failed:', err.message);
+    consecutiveNseErrs++;
+  } finally {
+    nseFetching = false;
   }
 }
 
-/**
- * Polling loop — decides the next tick interval based on market state.
- */
-function tick() {
+function scheduleNifty() {
   if (isMarketOpen()) {
-    fetchAndCache();
-    pollTimer = setTimeout(tick, POLL_INTERVAL_OPEN);
-    if (!isPolling) {
-      isPolling = true;
-      console.log('[Poller] Market OPEN — polling every 5 s');
-    }
+    const interval = consecutiveNseErrs >= 5
+      ? CHECK_INTERVAL_CLOSED
+      : LIVE_INTERVAL_OPEN;
+    fetchNseData();
+    niftyTimer = setTimeout(scheduleNifty, interval);
   } else {
-    if (isPolling) {
-      isPolling = false;
-      const ms = msUntilNextOpen();
-      const min = Math.round(ms / 60_000);
-      console.log(`[Poller] Market CLOSED — next check in ${min} min`);
-    }
-    // Still check periodically so we resume quickly after open
-    pollTimer = setTimeout(tick, POLL_INTERVAL_CLOSED);
+    niftyTimer = setTimeout(scheduleNifty, CHECK_INTERVAL_CLOSED);
   }
 }
 
-/** Start the poller. */
+// ── Global poller ─────────────────────────────────────────
+async function fetchGlobal() {
+  try {
+    const rawData = await fetchAllGlobalQuotes();
+    const data = rawData.map((q) => ({
+      id: q.symbol.toLowerCase().replace(/[^a-z0-9]/g, '_'),
+      name: q.name,
+      base: q.previousClose ?? q.last,
+      last: q.last,
+      change: q.change,
+      percentChange: q.percentChange,
+      previousClose: q.previousClose,
+      chg: { today: q.percentChange ?? 0 },
+    }));
+    cache.set('global_indices', { data, fetchedAt: new Date().toISOString() });
+    console.log(`[Poller:Global] Cached ${data.length} indices`);
+  } catch (err) {
+    console.error('[Poller:Global]', err.message);
+  }
+}
+
+function scheduleGlobal() {
+  if (isMarketOpen()) {
+    fetchGlobal();
+    globalTimer = setTimeout(scheduleGlobal, GLOBAL_INTERVAL_OPEN);
+  } else {
+    globalTimer = setTimeout(scheduleGlobal, CHECK_INTERVAL_CLOSED);
+  }
+}
+
+// ── Commodities poller ─────────────────────────────────────
+async function fetchCommodities() {
+  try {
+    const rawData = await fetchAllCommodities();
+    const data = rawData
+      .filter((c) => c.last != null)
+      .map((c) => ({
+        name: c.name,
+        last: c.last,
+        previousClose: c.previousClose,
+        change: c.change,
+        percentChange: c.percentChange,
+        chg: { today: c.percentChange ?? 0 },
+      }));
+    cache.set('commodities_data', { data, fetchedAt: new Date().toISOString() });
+    console.log(`[Poller:Commodities] Cached ${data.length} items`);
+  } catch (err) {
+    console.error('[Poller:Commodities]', err.message);
+  }
+}
+
+function scheduleCommodities() {
+  if (isMarketOpen()) {
+    fetchCommodities();
+    commoditiesTimer = setTimeout(scheduleCommodities, GLOBAL_INTERVAL_OPEN);
+  } else {
+    commoditiesTimer = setTimeout(scheduleCommodities, CHECK_INTERVAL_CLOSED);
+  }
+}
+
+// ── Start / stop ──────────────────────────────────────────
 function startPolling() {
-  if (pollTimer) return;
-  console.log('[Poller] Starting…');
-  // Immediate first fetch
-  fetchAndCache().finally(() => {
-    tick();
+  if (niftyTimer || globalTimer) return;
+  console.log('[Poller] Starting NIFTY + Global + Commodities pollers…');
+
+  // Immediate first fetch for all data sources
+  Promise.all([fetchNseData(), fetchGlobal(), fetchCommodities()]).finally(() => {
+    scheduleNifty();
+    scheduleGlobal();
+    scheduleCommodities();
+    isPolling = true;
+    console.log('[Poller] Polling active');
   });
 }
 
-/** Stop the poller cleanly. */
 function stopPolling() {
-  if (pollTimer) {
-    clearTimeout(pollTimer);
-    pollTimer = null;
-  }
+  if (niftyTimer) { clearTimeout(niftyTimer); niftyTimer = null; }
+  if (globalTimer) { clearTimeout(globalTimer); globalTimer = null; }
+  if (commoditiesTimer) { clearTimeout(commoditiesTimer); commoditiesTimer = null; }
   isPolling = false;
   console.log('[Poller] Stopped');
 }

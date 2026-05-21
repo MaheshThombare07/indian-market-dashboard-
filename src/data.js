@@ -52,17 +52,15 @@ export const GLOBAL = [
 ];
 
 export const COMMODITIES = [
-  {id:'gold24',name:'Gold 24K /gm',    base:7230,  chg:{today:4.50,yesterday:0.80,'5days':2.10,'1month':8.50}, pre:'₹'},
-  {id:'mcxgld',name:'MCX Gold (Apr)',  base:70362, chg:{today:0.35,yesterday:0.42,'5days':2.00,'1month':8.10}, pre:'₹'},
-  {id:'copper',name:'Copper /kg',      base:2729,  chg:{today:0.25,yesterday:-0.70,'5days':3.20,'1month':9.80}, pre:'₹'},
-  {id:'silver',name:'Silver 1Kg',      base:86600, chg:{today:0.10,yesterday:-0.22,'5days':1.80,'1month':5.20}, pre:'₹'},
-  {id:'nickel',name:'Nickel /kg',      base:1480,  chg:{today:0.60,yesterday:-0.80,'5days':3.50,'1month':8.90}, pre:'₹'},
-  {id:'brent', name:'Brent Crude /bbl',base:87.45, chg:{today:0.32,yesterday:-0.63,'5days':-1.20,'1month':-3.10}, pre:'$'},
-  {id:'wti',   name:'WTI Crude /bbl',  base:82.80, chg:{today:0.28,yesterday:-0.58,'5days':-1.10,'1month':-2.90}, pre:'$'},
-  {id:'natgas',name:'Natural Gas',     base:239.50,chg:{today:0.30,yesterday:-0.54,'5days':0.80,'1month':1.40}, pre:'₹'},
-  {id:'zinc',  name:'Zinc /kg',        base:288,   chg:{today:0.35,yesterday:-0.42,'5days':1.90,'1month':5.10}, pre:'₹'},
-  {id:'alum',  name:'Aluminium /kg',   base:238,   chg:{today:0.42,yesterday:-0.55,'5days':2.10,'1month':5.80}, pre:'₹'},
-  {id:'pet',   name:'Petrol (Mumbai)', base:106.31,chg:{today:0.00,yesterday:0.00,'5days':0.00,'1month':0.00}, pre:'₹'},
+  {id:'gold',   name:'Gold /oz',      base:2370,  chg:{today:0.55,yesterday:-0.32,'5days':1.20,'1month':3.50}, pre:'$'},
+  {id:'silver', name:'Silver /oz',    base:31.50, chg:{today:0.42,yesterday:-0.28,'5days':2.10,'1month':5.80}, pre:'$'},
+  {id:'brent',  name:'Brent Crude',   base:87.45, chg:{today:0.32,yesterday:-0.63,'5days':-1.20,'1month':-3.10}, pre:'$'},
+  {id:'wti',    name:'WTI Crude',     base:82.80, chg:{today:0.28,yesterday:-0.58,'5days':-1.10,'1month':-2.90}, pre:'$'},
+  {id:'natgas', name:'Natural Gas',   base:2.395, chg:{today:0.30,yesterday:-0.54,'5days':0.80,'1month':1.40}, pre:'$'},
+  {id:'copper', name:'Copper /kg',    base:719,   chg:{today:0.25,yesterday:-0.70,'5days':3.20,'1month':9.80}, pre:'₹'},
+  {id:'nickel', name:'Nickel /kg',    base:1480,  chg:{today:0.60,yesterday:-0.80,'5days':3.50,'1month':8.90}, pre:'₹'},
+  {id:'zinc',   name:'Zinc /kg',      base:288,   chg:{today:0.35,yesterday:-0.42,'5days':1.90,'1month':5.10}, pre:'₹'},
+  {id:'alum',   name:'Aluminium /kg', base:238,   chg:{today:0.42,yesterday:-0.55,'5days':2.10,'1month':5.80}, pre:'₹'},
 ];
 
 export const FOREX = [
@@ -131,9 +129,9 @@ export const TICKER_DATA = [
   {name:'SENSEX',   val:'79,250', chg:'+0.05%', up:true},
   {name:'Nifty Bank',val:'52,750',chg:'+0.35%', up:true},
   {name:'India VIX', val:'13.50', chg:'-0.10',  up:false},
-  {name:'Gold 24K',  val:'₹72,300',chg:'+4.5%', up:true},
-  {name:'Silver',    val:'₹86,600',chg:'+0.10%',up:true},
-  {name:'Brent',     val:'$87.45', chg:'+0.32%',up:true},
+  {name:'Gold /oz',  val:'$2,370', chg:'+0.55%',up:true},
+  {name:'Silver /oz',val:'$31.50', chg:'+0.42%',up:true},
+  {name:'Brent Crude',val:'$87.45',chg:'+0.32%',up:true},
   {name:'USD/INR',   val:'83.20',  chg:'-0.99%',up:false},
   {name:'SGX Nifty', val:'24,180', chg:'+0.54%',up:true},
   {name:'NASDAQ',    val:'16,320', chg:'+0.55%',up:true},

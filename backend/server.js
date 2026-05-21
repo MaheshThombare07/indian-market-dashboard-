@@ -19,6 +19,12 @@ const express = require('express');
 const cors = require('cors');
 
 const niftyRoutes = require('./routes/nifty');
+const globalRoutes = require('./routes/global');
+const bseRoutes = require('./routes/bse');
+const forexRoutes = require('./routes/forex');
+const bondsRoutes = require('./routes/bonds');
+const rbiRoutes = require('./routes/rbi');
+const commoditiesRoutes = require('./routes/commodities');
 const { startPolling } = require('./services/poller');
 const { getMarketStatus } = require('./utils/marketHours');
 
@@ -42,19 +48,44 @@ app.use((req, _res, next) => {
 // ── 5. Routes ─────────────────────────────────────────────
 
 // Health-check
-app.get('/', (_req, res) => {
-  res.json({
-    service: 'India Market Dashboard API',
-    status: 'running',
-    marketStatus: getMarketStatus(),
-    endpoints: {
-      nifty: '/api/nifty',
-    },
+  app.get('/', (_req, res) => {
+    res.json({
+      service: 'India Market Dashboard API',
+      status: 'running',
+      marketStatus: getMarketStatus(),
+      endpoints: {
+        nifty: '/api/nifty',
+        niftyHistory: '/api/nifty/history',
+        global: '/api/global',
+        bse: '/api/bse',
+        forex: '/api/forex',
+        bonds: '/api/bonds',
+        rbi: '/api/rbi',
+        commodities: '/api/commodities',
+      },
+    });
   });
-});
 
-// NIFTY indices
-app.use('/api/nifty', niftyRoutes);
+  // NIFTY indices (live + history)
+  app.use('/api/nifty', niftyRoutes);
+
+  // Global indices
+  app.use('/api/global', globalRoutes);
+
+  // BSE / Sensex indices
+  app.use('/api/bse', bseRoutes);
+
+  // Forex (INR pairs)
+  app.use('/api/forex', forexRoutes);
+
+  // Bonds & Treasury yields
+  app.use('/api/bonds', bondsRoutes);
+
+  // RBI policy rates
+  app.use('/api/rbi', rbiRoutes);
+
+  // Commodities (Yahoo Finance)
+  app.use('/api/commodities', commoditiesRoutes);
 
 // ── 6. 404 handler ────────────────────────────────────────
 app.use((_req, res) => {
@@ -70,7 +101,15 @@ app.use((err, _req, res, _next) => {
   });
 });
 
-// ── 8. Start ──────────────────────────────────────────────
+// ── 8. Process-level error handlers ──────────────────────
+process.on('unhandledRejection', (reason) => {
+  console.error('[FATAL] Unhandled Rejection:', reason?.message || reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL] Uncaught Exception:', err.message);
+});
+
+// ── 9. Start ──────────────────────────────────────────────
 
 app.listen(PORT, () => {
   console.log(`\n🚀 Server running at http://localhost:${PORT}`);

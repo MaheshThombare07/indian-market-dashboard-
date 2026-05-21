@@ -5,17 +5,37 @@ import RateRow from './RateRow';
 import NewsItem from './NewsItem';
 import EcoRow from './EcoRow';
 import useNiftyData from '../hooks/useNiftyData';
+import useGlobalData from '../hooks/useGlobalData';
+import useForexData from '../hooks/useForexData';
+import useBondsData from '../hooks/useBondsData';
+import useRbiData from '../hooks/useRbiData';
+import useBseData from '../hooks/useBseData';
+import useCommoditiesData from '../hooks/useCommoditiesData';
 
 export default function Overview({ period, watchlist, onToggleWatch }) {
   const allItems = [...NIFTY, ...BSE, ...GLOBAL, ...COMMODITIES];
   const watchedItems = allItems.filter(x => watchlist.includes(x.id));
 
-  // Live NIFTY data from Express backend — merged with static fallback
+  // Live NIFTY data — merged with static fallback + historical periods
   const { data: niftyData, loading, marketOpen, isLive, error } = useNiftyData(NIFTY);
   const sortedNifty = [...niftyData].sort((a, b) => (b.chg[period] || 0) - (a.chg[period] || 0));
-  const sortedBSE = [...BSE].sort((a, b) => (b.chg[period] || 0) - (a.chg[period] || 0));
-  const sortedGlobal = [...GLOBAL].sort((a, b) => (b.chg[period] || 0) - (a.chg[period] || 0));
-  const sortedComm = [...COMMODITIES].sort((a, b) => (b.chg[period] || 0) - (a.chg[period] || 0));
+
+  // Live global indices from Yahoo Finance
+  const { data: globalData, isLive: globalLive, error: globalError } = useGlobalData(GLOBAL);
+  const sortedGlobal = [...globalData].sort((a, b) => (b.chg[period] || 0) - (a.chg[period] || 0));
+
+  // Live BSE / Sensex data (via NSE — same endpoint as NIFTY)
+  const { data: bseData, isLive: bseLive, marketOpen: bseOpen, error: bseError } = useBseData(BSE);
+  const sortedBSE = [...bseData].sort((a, b) => (b.chg[period] || 0) - (a.chg[period] || 0));
+
+  // Live commodities data (Yahoo Finance + static fallback for MCX metals)
+  const { data: commodData, isLive: commodLive, error: commodError } = useCommoditiesData(COMMODITIES);
+  const sortedComm = [...commodData].sort((a, b) => (b.chg[period] || 0) - (a.chg[period] || 0));
+
+  // Live forex, bonds, RBI data
+  const { data: forexData, isLive: forexLive } = useForexData(FOREX);
+  const { data: bondsData } = useBondsData(BONDS);
+  const { data: rbiData } = useRbiData(RBI);
 
   return (
     <div className="overview-grid body">
@@ -37,7 +57,9 @@ export default function Overview({ period, watchlist, onToggleWatch }) {
         <div className="panel">
           <div className="panel-hdr">
             <span className="panel-title">BSE / Sensex indices</span>
-            <span className="panel-badge">BSE</span>
+            <span className="panel-badge" style={{background: bseError ? 'var(--red-bg)' : bseOpen ? 'var(--green-bg)' : 'var(--bg3)', color: bseError ? 'var(--red-text)' : bseOpen ? 'var(--green-text)' : 'var(--text3)'}}>
+              {bseError ? 'offline' : bseLive ? (bseOpen ? '● LIVE' : 'cached') : 'demo'}
+            </span>
           </div>
           <div className="panel-scroll" style={{maxHeight:200}}>
             {sortedBSE.map((item, i) => (
@@ -52,7 +74,9 @@ export default function Overview({ period, watchlist, onToggleWatch }) {
         <div className="panel">
           <div className="panel-hdr">
             <span className="panel-title">Global indices</span>
-            <span className="panel-badge">ranked by %</span>
+            <span className="panel-badge" style={{background: globalError ? 'var(--red-bg)' : globalLive ? 'var(--green-bg)' : 'var(--bg3)', color: globalError ? 'var(--red-text)' : globalLive ? 'var(--green-text)' : 'var(--text3)'}}>
+              {globalError ? 'offline' : globalLive ? '● LIVE' : 'demo'}
+            </span>
           </div>
           <div className="panel-scroll" style={{maxHeight:270}}>
             {sortedGlobal.map((item, i) => (
@@ -63,7 +87,9 @@ export default function Overview({ period, watchlist, onToggleWatch }) {
         <div className="panel">
           <div className="panel-hdr">
             <span className="panel-title">Commodities & MCX</span>
-            <span className="panel-badge">ranked by %</span>
+            <span className="panel-badge" style={{background: commodError ? 'var(--red-bg)' : commodLive ? 'var(--green-bg)' : 'var(--bg3)', color: commodError ? 'var(--red-text)' : commodLive ? 'var(--green-text)' : 'var(--text3)'}}>
+              {commodError ? 'offline' : commodLive ? '● LIVE' : 'demo'}
+            </span>
           </div>
           <div className="panel-scroll" style={{maxHeight:190}}>
             {sortedComm.map((item, i) => (
@@ -78,10 +104,12 @@ export default function Overview({ period, watchlist, onToggleWatch }) {
         <div className="panel">
           <div className="panel-hdr">
             <span className="panel-title">Forex / Bonds / Policy rates</span>
-            <span className="panel-badge">Live</span>
+            <span className="panel-badge" style={{background: forexLive ? 'var(--green-bg)' : 'var(--bg3)', color: forexLive ? 'var(--green-text)' : 'var(--text3)'}}>
+              {forexLive ? '● FX Live' : 'cached'}
+            </span>
           </div>
           <div id="forex-panel">
-            <ForexPanel period={period} />
+            <ForexPanel period={period} forexData={forexData} bondsData={bondsData} rbiData={rbiData} />
           </div>
         </div>
         <div className="panel">
@@ -135,12 +163,12 @@ export default function Overview({ period, watchlist, onToggleWatch }) {
   );
 }
 
-function ForexPanel({ period }) {
+function ForexPanel({ period, forexData, bondsData, rbiData }) {
   const mult = {today:1, yesterday:-0.7, '5days':2.2, '1month':5.0}[period] || 1;
   return (
     <>
       <SectionDivider text="INR forex pairs" />
-      {FOREX.map((f, i) => {
+      {forexData.map((f, i) => {
         const adj = (f.chg * mult).toFixed(2);
         const up = +adj >= 0;
         return (
@@ -152,7 +180,7 @@ function ForexPanel({ period }) {
         );
       })}
       <SectionDivider text="Bonds & yields" />
-      {BONDS.map((b, i) => (
+      {bondsData.map((b, i) => (
         <RateRow key={i}>
           <span className="rate-label">{b.name}</span>
           <span className="rate-val">{b.val}</span>
@@ -160,7 +188,7 @@ function ForexPanel({ period }) {
         </RateRow>
       ))}
       <SectionDivider text="RBI & policy rates" />
-      {RBI.map((r, i) => (
+      {rbiData.map((r, i) => (
         <RateRow key={i}>
           <span className="rate-label">{r.name}</span>
           <span className="rate-val">{r.val}</span>
