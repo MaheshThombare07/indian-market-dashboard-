@@ -4,12 +4,15 @@ import SectionDivider from './SectionDivider';
 import RateRow from './RateRow';
 import NewsItem from './NewsItem';
 import EcoRow from './EcoRow';
+import useNiftyData from '../hooks/useNiftyData';
 
 export default function Overview({ period, watchlist, onToggleWatch }) {
   const allItems = [...NIFTY, ...BSE, ...GLOBAL, ...COMMODITIES];
   const watchedItems = allItems.filter(x => watchlist.includes(x.id));
 
-  const sortedNifty = [...NIFTY].sort((a, b) => (b.chg[period] || 0) - (a.chg[period] || 0));
+  // Live NIFTY data from Express backend — merged with static fallback
+  const { data: niftyData, loading, marketOpen, isLive, error } = useNiftyData(NIFTY);
+  const sortedNifty = [...niftyData].sort((a, b) => (b.chg[period] || 0) - (a.chg[period] || 0));
   const sortedBSE = [...BSE].sort((a, b) => (b.chg[period] || 0) - (a.chg[period] || 0));
   const sortedGlobal = [...GLOBAL].sort((a, b) => (b.chg[period] || 0) - (a.chg[period] || 0));
   const sortedComm = [...COMMODITIES].sort((a, b) => (b.chg[period] || 0) - (a.chg[period] || 0));
@@ -21,7 +24,9 @@ export default function Overview({ period, watchlist, onToggleWatch }) {
         <div className="panel">
           <div className="panel-hdr">
             <span className="panel-title">NIFTY — broad & sectoral</span>
-            <span className="panel-badge">ranked by % change</span>
+            <span className="panel-badge" style={{background: error ? 'var(--red-bg)' : marketOpen ? 'var(--green-bg)' : 'var(--bg3)', color: error ? 'var(--red-text)' : marketOpen ? 'var(--green-text)' : 'var(--text3)'}}>
+              {loading ? 'loading…' : error ? 'offline' : isLive ? (marketOpen ? '● LIVE' : 'cached') : 'demo'}
+            </span>
           </div>
           <div className="panel-scroll" style={{maxHeight:440}}>
             {sortedNifty.map((item, i) => (
